@@ -1,0 +1,6 @@
+fdfs:
+  connect-timeout: 2000
+  so-timeout: 3000
+  tracker-list:
+    - 10.0.4.143:22122
+    - 10.0.4.143:22122
