@@ -4,11 +4,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.Properties;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,26 +13,35 @@ import org.slf4j.LoggerFactory;
 public class KafkaConsumer<K,V> implements Runnable{
 	private final static Logger	logger	= LoggerFactory.getLogger(KafkaConsumer.class);
 	private boolean poll = true;
-	private KafkaBusiness<Object,K,V> kafkaBusiness;
-	public KafkaConsumer(KafkaBusiness<Object,K,V> kafkaBusiness){
+	private KafkaConsumerService<?,K,V> kafkaBusiness;
+	private String DEFAULTTOPICS = "DEFAULTTOPICS";	//默认的topics
+	private final Properties properties = new Properties();
+	
+	public KafkaConsumer(KafkaConsumerService<?,K,V> kafkaBusiness){
 		this.kafkaBusiness = kafkaBusiness;
+		init();
 	}
 	
-	private static final Properties properties = new Properties();
-	static{
+	private void init(){
 		String conf ="/kafka-consumer.properties";
 		InputStream inputStream = null;
+		logger.info("begin to init the kafka consumer configuration...");
 		try {
 			inputStream =  KafkaConsumer.class.getResourceAsStream(conf);
 		} catch (Exception e) {
 			inputStream = KafkaConsumer.class.getResourceAsStream("/conf/kafka-consumer.properties");
 			logger.error("error",e);
+			throw new RuntimeException("init the kafka consumer confituration error!",e);
 		}
 		try {
 			properties.load(inputStream);
-			
+			if(!properties.containsKey("topics")){
+				throw new RuntimeException("init the kafka consumer confituration error! don't contains the topics");
+			}
+			logger.info("finished to init the kafka consumer configuration...");
 		} catch (IOException e) {
 			logger.error("error",e);
+			throw new RuntimeException("init the kafka consumer confituration error!",e);
 		}
 	}
 	
@@ -50,29 +56,13 @@ public class KafkaConsumer<K,V> implements Runnable{
 
 	private org.apache.kafka.clients.consumer.KafkaConsumer<K, V> createConsumer(){
 		org.apache.kafka.clients.consumer.KafkaConsumer<K, V> consumer = new org.apache.kafka.clients.consumer.KafkaConsumer<K, V>(properties);
-		Collection<String> coll = Arrays.asList(properties.getProperty("topics", "TableSingleRowGet"));
+		Collection<String> coll = Arrays.asList(properties.getProperty("topics", DEFAULTTOPICS ));
 		consumer.subscribe(coll);
 		return consumer;
 	}
 	
 	public void run() {
 		org.apache.kafka.clients.consumer.KafkaConsumer<K, V> consumer = this.createConsumer();
-		try{
-			while(isPoll()){
-				ConsumerRecords<K, V> records = consumer.poll(1000L);
-				Iterator<ConsumerRecord<K, V>> iterator = records.iterator();
-				while(iterator.hasNext()){
-					ConsumerRecord<K, V> next = iterator.next();
-					kafkaBusiness.dealConsumer(next);
-				}
-			}
-		}catch(Exception ex){
-			logger.error("error:"+ex);
-		}finally{
-			if(null != consumer){
-				consumer.close();
-			}
-		}
-		
+		kafkaBusiness.dealConsumer(consumer);
 	}
 }

@@ -4,49 +4,61 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class KafkaProducer {
-	
-	private final static Logger	logger	= LoggerFactory.getLogger(KafkaConsumer.class);
+/**
+ * kafka producer to ptoducer message to the kafka's cluster
+ * @author leeo
+ *
+ * @param <K> the key's data type
+ * @param <V> the value's data type
+ */
+public class KafkaProducer<K, V>{
 	private static final Properties properties = new Properties();
-	public KafkaProducer(){}
-	
-	static{
+	private org.apache.kafka.clients.producer.KafkaProducer<K, V> producer = null;
+	private final static Logger	logger	= LoggerFactory.getLogger(KafkaConsumer.class);	
+	public KafkaProducer(){
 		init();
 	}
 	
-	public static void init(){
+	/**
+	 * init the configuration
+	 */
+	private void init(){
 		String conf ="/kafka-producer.properties";
 		InputStream inputStream = null;
+		logger.info("begin to init the kafka producer configuration...");
 		try {
 			inputStream =  KafkaConsumer.class.getResourceAsStream(conf);
+			if(null == inputStream){
+				throw new RuntimeException("init the kafka producer confituration fail! get the kafka-producer.properties file failed!");
+			}
 		} catch (Exception e) {
-			inputStream = KafkaConsumer.class.getResourceAsStream("/conf/kafka-producer.properties");
 			logger.error("error",e);
+			throw new RuntimeException("init the kafka producer confituration error!",e);
 		}
 		try {
 			properties.load(inputStream);
-			
+			producer = new org.apache.kafka.clients.producer.KafkaProducer<K, V>(properties);
+			logger.info("finished to init the kafka producer configuration...");
 		} catch (IOException e) {
-			logger.error("error",e);
+			logger.error("init the kafka producer confituration error!",e);
+			throw new RuntimeException("init the kafka producer confituration error!",e);
 		}
 	}
-	
-	
-	public void sendMsg(String topic,String key,String value){
-		if(topic == null)topic=properties.getProperty("topic");
-		if(topic == null)return;
-		org.apache.kafka.clients.producer.KafkaProducer<String, String> producer = new org.apache.kafka.clients.producer.KafkaProducer<String, String>(properties);
-		ProducerRecord<String, String> record = new ProducerRecord<String, String>(topic, key, value);
+	public void sendMsg(String topic,K key,V value){
+		if(StringUtils.isEmpty(topic))return;
+		ProducerRecord<K, V> record = new ProducerRecord<K, V>(topic, key, value);
 		producer.send(record );
-		producer.close();
+		producer.flush();
 	}
-	
-	public static void main(String[] args) {
-		KafkaProducer producer = new KafkaProducer();
-		producer.sendMsg("TableSingleRowGet", "aa", "bb");
+	public void sendMsg(String topic,V value){
+		if(StringUtils.isEmpty(topic))return;
+		ProducerRecord<K, V> record = new ProducerRecord<K, V>(topic, value);
+		producer.send(record);
+		producer.flush();
 	}
 }
